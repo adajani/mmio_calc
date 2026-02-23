@@ -106,7 +106,7 @@ make defconfig
 
 ### Enable static linking:
 ```bash
-echo 'CONFIG_STATIC=y' >> .config
+sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
 ```
 
 > **menuconfig alternative:** `make menuconfig` → Settings → Build Options →
