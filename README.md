@@ -32,6 +32,7 @@ sudo apt install -y \
   libglib2.0-dev libpixman-1-dev \
   python3 python3-venv \
   libfdt-dev zlib1g-dev
+pip install tomli
 ```
 
 ## Step 2: Clone and Build QEMU from Source
