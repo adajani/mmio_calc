@@ -107,7 +107,6 @@ make defconfig
 ### Enable static linking:
 ```bash
 echo 'CONFIG_STATIC=y' >> .config
-make olddefconfig
 ```
 
 > **menuconfig alternative:** `make menuconfig` → Settings → Build Options →
@@ -125,12 +124,11 @@ cd ..
 
 ## Step 5: Build the Test Program
 
-Copy `calc_test.c` in the same directory as the `busybox/` folder.
+Create a `calc_test.c` in any directory, and copy the binary to `rootfs/bin` folder.
 
 ### Compile statically and install into rootfs:
 ```bash
-gcc -static -o calc_test calc_test.c
-cp calc_test rootfs/bin/
+gcc -static -o rootfs/bin/calc_test calc_test.c
 ```
 
 ---
