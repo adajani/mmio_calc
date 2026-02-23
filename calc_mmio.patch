@@ -1,0 +1,143 @@
+From 67961e608becf295d32b5de4893a9a3a44509f12 Mon Sep 17 00:00:00 2001
+From: Ahmed Dajani <adajani@iastate.edu>
+Date: Sun, 22 Feb 2026 21:19:01 -0700
+Subject: [PATCH] Adding Simple MMIO Calculator
+
+---
+ hw/i386/pc_piix.c   |  5 +++
+ hw/misc/meson.build |  3 ++
+ hw/misc/mmio_calc.c | 93 +++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 101 insertions(+)
+ create mode 100644 hw/misc/mmio_calc.c
+
+diff --git a/hw/i386/pc_piix.c b/hw/i386/pc_piix.c
+index f9e0bca974..81c0bee00c 100644
+--- a/hw/i386/pc_piix.c
++++ b/hw/i386/pc_piix.c
+@@ -320,6 +320,11 @@ static void pc_init1(MachineState *machine, const char *pci_type)
+                                x86_nvdimm_acpi_dsmio,
+                                x86ms->fw_cfg, OBJECT(pcms));
+     }
++
++    // Expose a simple MMIO device at 0xFE000000, for testing MMIO access from the guest.
++    DeviceState *mmio_calc_dev = qdev_new("mmio-calc");
++    sysbus_realize_and_unref(SYS_BUS_DEVICE(mmio_calc_dev), &error_fatal);
++    sysbus_mmio_map_overlap(SYS_BUS_DEVICE(mmio_calc_dev), 0, 0xFE000000, 1);
+ }
+ 
+ typedef enum PCSouthBridgeOption {
+diff --git a/hw/misc/meson.build b/hw/misc/meson.build
+index d304a98498..6a2a33cf8f 100644
+--- a/hw/misc/meson.build
++++ b/hw/misc/meson.build
+@@ -167,3 +167,6 @@ system_ss.add(when: 'CONFIG_SBSA_REF', if_true: files('sbsa_ec.c'))
+ 
+ # HPPA devices
+ system_ss.add(when: 'CONFIG_LASI', if_true: files('lasi.c'))
++
++# MMIO Custom device
++system_ss.add(files('mmio_calc.c'))
+\ No newline at end of file
+diff --git a/hw/misc/mmio_calc.c b/hw/misc/mmio_calc.c
+new file mode 100644
+index 0000000000..e41a75f4bc
+--- /dev/null
++++ b/hw/misc/mmio_calc.c
+@@ -0,0 +1,93 @@
++#include "qemu/osdep.h"
++#include "hw/core/sysbus.h"
++#include "qemu/log.h"
++
++#define TYPE_MMIO_CALC "mmio-calc"
++
++typedef struct MMIOCalcState {
++    SysBusDevice parent_obj;
++
++    uint32_t a, b, op;
++    uint32_t result;
++    uint32_t status;
++
++    MemoryRegion mmio;
++} MMIOCalcState;
++
++OBJECT_DECLARE_SIMPLE_TYPE(MMIOCalcState, MMIO_CALC)
++
++static uint64_t calc_read(void *opaque, hwaddr addr, unsigned size)
++{
++    MMIOCalcState *s = opaque;
++
++    switch (addr) {
++    case 0x10: return s->result;
++    case 0x14: return s->status;
++    default: return 0;
++    }
++}
++
++static void calc_exec(MMIOCalcState *s)
++{
++    s->status = 1;
++
++    switch (s->op) {
++    case 0: s->result = s->a + s->b; break;
++    case 1: s->result = s->a - s->b; break;
++    case 2: s->result = s->a * s->b; break;
++    case 3:
++        if (s->b == 0) {
++            s->status = 3;
++            return;
++        }
++        s->result = s->a / s->b;
++        break;
++    default: s->status = 3; return;
++    }
++
++    s->status = 2;
++}
++
++static void calc_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
++{
++    MMIOCalcState *s = opaque;
++
++    switch (addr) {
++    case 0x00: s->a = val; break;
++    case 0x04: s->b = val; break;
++    case 0x08: s->op = val; break;
++    case 0x0C:
++        if (val == 1)
++            calc_exec(s);
++        break;
++    }
++}
++
++static const MemoryRegionOps calc_ops = {
++    .read = calc_read,
++    .write = calc_write,
++    .endianness = DEVICE_NATIVE_ENDIAN,
++};
++
++static void mmio_calc_init(Object *obj)
++{
++    MMIOCalcState *s = MMIO_CALC(obj);
++
++    memory_region_init_io(&s->mmio, obj, &calc_ops, s,
++                          "mmio-calc", 0x1000);
++    sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
++}
++
++static const TypeInfo mmio_calc_info = {
++    .name          = TYPE_MMIO_CALC,
++    .parent        = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(MMIOCalcState),
++    .instance_init = mmio_calc_init,
++};
++
++static void mmio_calc_register_types(void)
++{
++    type_register_static(&mmio_calc_info);
++}
++
++type_init(mmio_calc_register_types)
+\ No newline at end of file
+-- 
+2.34.1
+
