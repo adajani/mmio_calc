@@ -56,6 +56,8 @@ git apply qemu.diff
 
 ### Build:
 ```bash
+mkdir build
+cd build
 make -j$(nproc)
 ```
 
